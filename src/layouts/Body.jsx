@@ -1,132 +1,121 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect, useState } from 'react';
+import ProductCard from '../components/ProductCard';
 
-const Body = () => {
-  const [filtros, setFiltros] = useState({ talla: '', precio: '', categoria: '' });
+function Body() {
   const [productos, setProductos] = useState([]);
   const [cargando, setCargando] = useState(true);
-  const [paginaActual, setPaginaActual] = useState(1);
-  const [carrito, setCarrito] = useState([]);
-  const productosPorPagina = 8;
+
+  // Estado para carrito y favoritos
+  const [cart, setCart] = useState([]);
+  const [favorites, setFavorites] = useState([]);
 
   useEffect(() => {
-    const obtenerProductos = async () => {
+    const fetchProductos = async () => {
       try {
         const respuesta = await fetch('http://localhost:3000/api/productos');
-        if (!respuesta.ok) throw new Error('Error al obtener productos');
-        const datos = await respuesta.json();
-        setProductos(datos);
+        const data = await respuesta.json();
+        setProductos(data);
       } catch (error) {
-        console.error(error.message);
+        console.error('Error al obtener productos:', error);
       } finally {
         setCargando(false);
       }
     };
-    obtenerProductos();
+    fetchProductos();
   }, []);
 
-  const manejarCambioFiltro = (e) => {
-    setFiltros((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  // Lógica para BUY NOW
+  const handleBuyNow = (producto) => {
+    // 1) Agrega el producto al carrito
+    // 2) Redirige a la página de Checkout, por ejemplo
+    setCart((prevCart) => [...prevCart, { ...producto, cantidad: 1 }]);
+    alert(`¡Compraste el producto: ${producto.nombre} en talla ${producto.tallaSeleccionada}!`);
+    // Podrías hacer un redirect a /checkout
   };
 
-  const productosFiltrados = productos.filter(({ talla, categoria, precio }) => {
-    return (
-      (!filtros.talla || talla === filtros.talla) &&
-      (!filtros.categoria || categoria === filtros.categoria) &&
-      (!filtros.precio ||
-        (filtros.precio === 'menor50' && precio < 50) ||
-        (filtros.precio === 'entre50y100' && precio >= 50 && precio <= 100) ||
-        (filtros.precio === 'mayor100' && precio > 100))
-    );
-  });
-
-  const productosPaginados = productosFiltrados.slice(
-    (paginaActual - 1) * productosPorPagina,
-    paginaActual * productosPorPagina
-  );
-  const totalPaginas = Math.ceil(productosFiltrados.length / productosPorPagina);
-
-  const modificarCarrito = useCallback((producto, cantidad) => {
-    setCarrito((prev) => {
-      const existe = prev.find((item) => item.id === producto.id);
+  // Lógica para ADD TO CART
+  const handleAddToCart = (producto) => {
+    setCart((prevCart) => {
+      const existe = prevCart.find((p) => p.nombre === producto.nombre && p.tallaSeleccionada === producto.tallaSeleccionada);
       if (existe) {
-        return prev
-          .map((item) => (item.id === producto.id ? { ...item, cantidad: item.cantidad + cantidad } : item))
-          .filter((item) => item.cantidad > 0);
+        // Si el producto existe, incrementa la cantidad
+        return prevCart.map((p) =>
+          p.nombre === producto.nombre && p.tallaSeleccionada === producto.tallaSeleccionada
+            ? { ...p, cantidad: p.cantidad + 1 }
+            : p
+        );
+      }
+      // Si no existe, agrégalo con cantidad 1
+      return [...prevCart, { ...producto, cantidad: 1 }];
+    });
+    alert(`Agregado al carrito: ${producto.nombre} (talla: ${producto.tallaSeleccionada}).`);
+  };
+
+  // Lógica para ADD TO FAVORITES
+  const handleAddToFavorites = (producto) => {
+    setFavorites((prevFav) => {
+      const existe = prevFav.find((f) => f.nombre === producto.nombre && f.tallaSeleccionada === producto.tallaSeleccionada);
+      if (existe) {
+        // Si ya está en favoritos, podrías quitarlo
+        return prevFav.filter((f) => !(f.nombre === producto.nombre && f.tallaSeleccionada === producto.tallaSeleccionada));
       } else {
-        return [...prev, { ...producto, cantidad: 1 }];
+        // Si no está, lo agregas
+        return [...prevFav, producto];
       }
     });
-  }, []);
+    alert(`¡Producto favorito: ${producto.nombre} (talla: ${producto.tallaSeleccionada})!`);
+  };
 
-  const totalCarrito = carrito.reduce((total, { precio, cantidad }) => total + precio * cantidad, 0);
+  if (cargando) {
+    return <p className="text-center mt-8">Cargando productos...</p>;
+  }
+
+  if (!productos.length) {
+    return <p className="text-center mt-8">No hay productos disponibles.</p>;
+  }
 
   return (
-    <main className="bg-white py-10 px-6">
-      <section className="text-center mb-10">
-        <h2 className="text-4xl font-bold text-pink-600">Bienvenido a Urban Clothes</h2>
-        <p className="text-gray-700 mt-2">Explora nuestra colección de ropa moderna.</p>
-      </section>
+    <div className="p-4">
+      <h2 className="text-2xl font-bold mb-6">Nuestros Productos</h2>
 
-      {/* Filtros */}
-      <div className="flex flex-wrap justify-center gap-4 mb-6">
-        {['Talla', 'Categoría', 'Precio'].map((filtro) => (
-          <select key={filtro} className="border rounded px-4 py-2" name={filtro.toLowerCase()} onChange={manejarCambioFiltro}>
-            <option value="">Filtrar por {filtro}</option>
-            {filtro === 'Talla' && ['XS', 'S', 'M', 'L', 'XL'].map((op) => <option key={op} value={op}>{op}</option>)}
-            {filtro === 'Categoría' && ['Hombre', 'Mujer', 'Unisex'].map((op) => <option key={op} value={op}>{op}</option>)}
-            {filtro === 'Precio' && ['menor50', 'entre50y100', 'mayor100'].map((op) => <option key={op} value={op}>{op.replace(/([a-z])([0-9]+)/, '$1 $2')}</option>)}
-          </select>
-        ))}
-      </div>
-
-      {/* Productos */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-        {cargando ? <p>Cargando productos...</p> : productosPaginados.length ? (
-          productosPaginados.map((producto) => (
-            <div key={producto.id} className="bg-gray-50 border rounded-lg p-4 shadow-sm flex flex-col">
-              <img src={producto.imagen} alt={producto.nombre} className="h-40 object-cover mb-4 rounded" />
-              <h3 className="text-lg font-semibold">{producto.nombre}</h3>
-              <p className="text-gray-600">S/. {producto.precio.toFixed(2)}</p>
-              <p className="text-sm text-gray-500">Talla: {producto.talla}</p>
-              <button onClick={() => modificarCarrito(producto, 1)} className="mt-auto bg-pink-600 text-white px-4 py-2 rounded-lg hover:bg-pink-700">
-                Agregar al Carrito
-              </button>
-            </div>
-          ))
-        ) : (
-          <p>No se encontraron productos.</p>
-        )}
-      </div>
-
-      {/* Paginación */}
-      <div className="flex justify-center mt-8">
-        {Array.from({ length: totalPaginas }, (_, i) => (
-          <button key={i + 1} onClick={() => setPaginaActual(i + 1)} className={`mx-1 px-4 py-2 rounded-lg ${paginaActual === i + 1 ? 'bg-pink-600 text-white' : 'bg-gray-200'}`}>
-            {i + 1}
-          </button>
+        {productos.map((producto) => (
+          <ProductCard
+            key={producto.id}
+            nombre={producto.nombre}
+            precio={producto.precio}
+            imagen={producto.imagen}
+            stock={producto.stock !== false}
+            tallas={producto.talla || []}
+            onBuyNow={handleBuyNow}
+            onAddToCart={handleAddToCart}
+            onAddToFavorites={handleAddToFavorites}
+          />
         ))}
       </div>
 
-      {/* Carrito */}
-      <div className="bg-white p-4 rounded-lg shadow-md mt-12">
-        <h3 className="text-2xl font-semibold mb-4">🛒 Carrito</h3>
-        {carrito.length ? carrito.map(({ id, nombre, precio, cantidad }) => (
-          <div key={id} className="flex justify-between items-center border-b py-2">
-            <div>
-              <p className="font-semibold">{nombre}</p>
-              <p className="text-sm text-gray-500">S/. {precio.toFixed(2)} x {cantidad}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => modificarCarrito({ id }, -1)} className="bg-gray-300 px-2 py-1 rounded">-</button>
-              <span>{cantidad}</span>
-              <button onClick={() => modificarCarrito({ id }, 1)} className="bg-gray-300 px-2 py-1 rounded">+</button>
-            </div>
-          </div>
-        )) : <p className="text-gray-500">Tu carrito está vacío.</p>}
-        <p className="text-lg font-semibold mt-4">Total: S/. {totalCarrito.toFixed(2)}</p>
+      {/* Ejemplo: Muestra el carrito y favoritos al final */}
+      <div className="mt-8">
+        <h3 className="text-xl font-semibold">Carrito ({cart.length} items)</h3>
+        <ul className="list-disc ml-5">
+          {cart.map((item, index) => (
+            <li key={index}>
+              {item.nombre} - Talla: {item.tallaSeleccionada} - Cantidad: {item.cantidad}
+            </li>
+          ))}
+        </ul>
+
+        <h3 className="text-xl font-semibold mt-6">Favoritos ({favorites.length} items)</h3>
+        <ul className="list-disc ml-5">
+          {favorites.map((item, index) => (
+            <li key={index}>
+              {item.nombre} - Talla: {item.tallaSeleccionada}
+            </li>
+          ))}
+        </ul>
       </div>
-    </main>
+    </div>
   );
-};
+}
 
 export default Body;
